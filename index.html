@@ -47,7 +47,6 @@
   .navbtn{background:none;border:1px solid var(--line);color:var(--muted);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:14px;}
   .navbtn:hover{color:var(--text);border-color:var(--faint);}
   .rangelabel{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);min-width:150px;text-align:center;}
-  #fileInput{display:none;}
   .filelbl{font-size:12px;color:var(--muted);}
 
   .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap;}
@@ -118,20 +117,10 @@
     </div>
   </header>
 
-  <div class="bar" style="margin-bottom:10px;">
-    <div class="grp" style="flex:1;min-width:260px;">
-      <span class="eyebrow">Google Sheet link</span>
-      <input type="text" id="sheetUrl" placeholder="Paste published CSV link here"
-        style="flex:1;min-width:220px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;">
-      <button class="btn primary" id="connectBtn">Connect</button>
-      <button class="btn" id="refreshBtn" title="Re-fetch latest data">&#8635; Refresh</button>
-    </div>
-    <div class="grp">
-      <label class="btn" for="fileInput">Or upload file</label>
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
-    </div>
+  <div class="bar" style="margin-bottom:10px;justify-content:space-between;">
+    <div class="lede" id="fileStatus" style="margin:0;">Connecting to live data...</div>
+    <button class="btn" id="refreshBtn" title="Re-fetch latest data">&#8635; Refresh</button>
   </div>
-  <div class="lede" id="fileStatus" style="margin:-6px 0 16px;">No sheet connected &mdash; showing sample data. <span id="howToLink" style="color:var(--teal);cursor:pointer;text-decoration:underline;">How do I get this link?</span></div>
 
   <div class="bar">
     <div class="grp">
@@ -346,50 +335,8 @@ function loadFromSheetUrl(rawUrl){
     });
 }
 
-document.getElementById('connectBtn').addEventListener('click', ()=>{
-  const val = document.getElementById('sheetUrl').value;
-  if(!val.trim()){ document.getElementById('fileStatus').textContent = 'Paste a link first.'; return; }
-  loadFromSheetUrl(val);
-});
 document.getElementById('refreshBtn').addEventListener('click', ()=>{
-  const val = lastSheetUrl || document.getElementById('sheetUrl').value;
-  if(!val.trim()){ document.getElementById('fileStatus').textContent = 'Connect a sheet first.'; return; }
-  loadFromSheetUrl(val);
-});
-document.getElementById('howToLink').addEventListener('click', ()=>{
-  alert(
-"How to get a published CSV link from Google Sheets:\n\n"+
-"1. Open your Google Sheet.\n"+
-"2. File > Share > Publish to web.\n"+
-"3. Under 'Link', choose the 'Daily Report' sheet tab and select CSV as the format.\n"+
-"4. Click Publish, then copy the link shown.\n"+
-"5. Paste that link above and click Connect.\n\n"+
-"Also make sure sharing is set to 'Anyone with the link can view' (Share button, top right)."
-  );
-});
-
-document.getElementById('fileInput').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt){
-    try{
-      const wb = XLSX.read(evt.target.result, {type:'array', cellDates:true});
-      const sheetName = wb.SheetNames.find(n=>/daily|report|data/i.test(n)) || wb.SheetNames[0];
-      const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:''});
-      const parsed = parseSheetRows(json);
-      if(parsed.length === 0){
-        document.getElementById('fileStatus').textContent = 'Could not find matching rows - check column headers';
-        return;
-      }
-      rows = parsed;
-      document.getElementById('fileStatus').textContent = `Loaded ${file.name} (${rows.length} rows)`;
-      initFromRows();
-    }catch(err){
-      document.getElementById('fileStatus').textContent = 'Error reading file: '+err.message;
-    }
-  };
-  reader.readAsArrayBuffer(file);
+  loadFromSheetUrl(lastSheetUrl || DEFAULT_SHEET_URL);
 });
 
 function initFromRows(){
@@ -661,10 +608,7 @@ function render(){
 rows = genSample();
 initFromRows();
 document.querySelector('#periodSeg button[data-p="day"]').classList.add('active');
-if(DEFAULT_SHEET_URL){
-  document.getElementById('sheetUrl').value = DEFAULT_SHEET_URL;
-  loadFromSheetUrl(DEFAULT_SHEET_URL);
-}
+loadFromSheetUrl(DEFAULT_SHEET_URL);
 </script>
 </body>
 </html>
