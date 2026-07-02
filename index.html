@@ -300,6 +300,8 @@ function parseSheetRows(json){
   return out;
 }
 
+const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSI-STE6D8KcUEst_27dOcQBZYzseHZ6uspi0PF3RjsluRqpK0ZM7rOXnHtFvmZo6747pLroTr-ZH_i/pub?gid=1844731821&single=true&output=csv";
+
 let lastSheetUrl = null;
 
 function toCsvExportUrl(raw){
@@ -659,6 +661,10 @@ function render(){
 rows = genSample();
 initFromRows();
 document.querySelector('#periodSeg button[data-p="day"]').classList.add('active');
+if(DEFAULT_SHEET_URL){
+  document.getElementById('sheetUrl').value = DEFAULT_SHEET_URL;
+  loadFromSheetUrl(DEFAULT_SHEET_URL);
+}
 </script>
 </body>
 </html>
