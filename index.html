@@ -61,6 +61,18 @@
   .kpi .val{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:600;color:var(--text);margin-top:6px;letter-spacing:.01em;}
   .kpi .sub{font-size:11px;color:var(--faint);margin-top:4px;}
 
+  .kpi.pct{background:transparent;border:1px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px 8px;}
+  .kpi.pct .lbl{color:var(--faint);}
+  .kpi.pct .pctval{font-size:20px;color:var(--teal);margin-top:6px;}
+
+  .kpi.funnelcard{grid-column:1/-1;}
+  .funnel-row{display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;}
+  .funnel-stage{text-align:center;min-width:64px;}
+  .funnel-stage .fval{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--text);font-weight:600;}
+  .funnel-stage .fname{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+  .funnel-arrow{display:flex;flex-direction:column;align-items:center;color:var(--faint);font-size:16px;}
+  .funnel-arrow span{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal);margin-top:2px;}
+
   .grid2{display:grid;grid-template-columns:1.15fr 0.85fr;gap:16px;margin-bottom:20px;}
   @media(max-width:820px){.grid2{grid-template-columns:1fr;}}
   .panelbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;}
@@ -418,28 +430,71 @@ function renderKPIs(rowset){
       const t = TEAMS[tk];
       const teamRows = rowset.filter(r=>r.team===tk);
       const totals = sumMetrics(teamRows, t.metrics);
-      const grand = t.metrics.reduce((s,m)=>s+totals[m],0);
-      cards.push({label:t.label, val:grand, color:t.color, sub:t.metrics.map(m=>`${t.metricLabels[m]} ${totals[m]}`).join(' \u00b7 ')});
+      if(tk==='sales'){
+        cards.push({kind:'funnel', label:'Sales funnel', color:t.color, stages:[
+          {name:'Enquiry', val: totals.enquiry},
+          {name:'Test drive', val: totals.testDrive},
+          {name:'Bookings', val: totals.bookings},
+          {name:'Retail', val: totals.retail},
+        ]});
+      } else {
+        const grand = t.metrics.reduce((s,m)=>s+totals[m],0);
+        cards.push({kind:'stat', label:t.label, val:grand, color:t.color, sub:t.metrics.map(m=>`${t.metricLabels[m]} ${totals[m]}`).join(' \u00b7 ')});
+      }
     });
+  } else if(state.tab==='sales'){
+    const t = TEAMS.sales;
+    const teamRows = rowset.filter(r=>r.team==='sales');
+    const totals = sumMetrics(teamRows, t.metrics);
+    const pct = (num, den) => den>0 ? ((num/den)*100).toFixed(1)+'%' : '0.0%';
+    cards.push({kind:'stat', label:'Enquiry', val:totals.enquiry, color:t.color});
+    cards.push({kind:'pct', label:'Enquiry \u2192 Test drive', val:pct(totals.testDrive, totals.enquiry)});
+    cards.push({kind:'stat', label:'Test drive', val:totals.testDrive, color:t.color});
+    cards.push({kind:'pct', label:'Test drive \u2192 Booking', val:pct(totals.bookings, totals.testDrive)});
+    cards.push({kind:'stat', label:'Bookings', val:totals.bookings, color:t.color});
+    cards.push({kind:'pct', label:'Booking \u2192 Retail', val:pct(totals.retail, totals.bookings)});
+    cards.push({kind:'stat', label:'Retail', val:totals.retail, color:t.color});
   } else {
     const t = TEAMS[state.tab];
     const teamRows = rowset.filter(r=>r.team===state.tab);
     const totals = sumMetrics(teamRows, t.metrics);
-    t.metrics.forEach(m=> cards.push({label:t.metricLabels[m], val:totals[m], color:t.color, sub:''}));
+    t.metrics.forEach(m=> cards.push({kind:'stat', label:t.metricLabels[m], val:totals[m], color:t.color}));
     const execCount = new Set(teamRows.map(r=>r.exec)).size;
-    cards.push({label:'Active executives', val:execCount, color:'#8891A0', sub:''});
-    if(t.metrics.includes('bookings') && t.metrics.includes('enquiry')){
-      const conv = totals.enquiry>0 ? ((totals.bookings/totals.enquiry)*100).toFixed(1) : '0.0';
-      cards.push({label:'Enquiry to booking', val:conv+'%', color:t.color, sub:''});
-    }
+    cards.push({kind:'stat', label:'Active executives', val:execCount, color:'#8891A0'});
   }
-  kpiRow.innerHTML = cards.map(c=>`
-    <div class="kpi">
+  kpiRow.innerHTML = cards.map(renderKpiCard).join('');
+}
+
+function renderKpiCard(c){
+  if(c.kind==='pct'){
+    return `<div class="kpi pct">
+      <div class="lbl">${c.label}</div>
+      <div class="val pctval">${c.val}</div>
+    </div>`;
+  }
+  if(c.kind==='funnel'){
+    return `<div class="kpi funnelcard">
       <div class="bar-accent" style="background:${c.color}"></div>
       <div class="lbl">${c.label}</div>
-      <div class="val">${c.val}</div>
-      ${c.sub?`<div class="sub">${c.sub}</div>`:''}
-    </div>`).join('');
+      <div class="funnel-row">
+        ${c.stages.map((s,i)=>{
+          let arrow = '';
+          if(i>0){
+            const prev = c.stages[i-1].val;
+            const p = prev>0 ? ((s.val/prev)*100).toFixed(0) : '0';
+            arrow = `<div class="funnel-arrow">&rarr;<span>${p}%</span></div>`;
+          }
+          return `${arrow}<div class="funnel-stage"><div class="fval">${s.val}</div><div class="fname">${s.name}</div></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  return `<div class="kpi">
+    <div class="bar-accent" style="background:${c.color}"></div>
+    <div class="lbl">${c.label}</div>
+    <div class="val">${c.val}</div>
+    ${c.sub?`<div class="sub">${c.sub}</div>`:''}
+  </div>`;
 }
 
 function renderHierarchy(rowset){
