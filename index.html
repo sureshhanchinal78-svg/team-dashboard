@@ -203,6 +203,16 @@ const TEAM_ORDER = ['sales','crm','accessories','finance','warranty'];
 const TEAM_NAME_MAP = {'sales':'sales','crm':'crm','accessories':'accessories','finance':'finance',
   'extended warranty':'warranty','warranty':'warranty','extendedwarranty':'warranty'};
 
+function toLocalISO(d){
+  // Converts a Date to YYYY-MM-DD using LOCAL date parts, never UTC.
+  // (date.toISOString() converts to UTC first, which silently shifts
+  // the calendar date by a day in timezones ahead of UTC, e.g. India.)
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 let rows = [];
 let branches = [];
 let state = {branch:'All branches', period:'day', anchor:null, tab:'overview'};
@@ -221,7 +231,7 @@ function genSample(){
   const today = new Date('2026-07-01T00:00:00');
   for(let d=27; d>=0; d--){
     const dt = new Date(today); dt.setDate(dt.getDate()-d);
-    const ds = dt.toISOString().slice(0,10);
+    const ds = toLocalISO(dt);
     branchesList.forEach(br=>{
       salesExecs[br].forEach(ex=>{
         out.push({date:ds,branch:br,bm:bmByBranch[br],team:'sales',tl:salesTL[br],exec:ex,
@@ -262,13 +272,13 @@ function parseSheetRows(json){
     if(!team) return;
     let dateVal = map['date'];
     let ds;
-    if(dateVal instanceof Date){ ds = dateVal.toISOString().slice(0,10); }
+    if(dateVal instanceof Date){ ds = toLocalISO(dateVal); }
     else if(typeof dateVal === 'number'){
       const d = XLSX.SSF.parse_date_code(dateVal);
       ds = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
     } else {
       const parsed = new Date(dateVal);
-      ds = isNaN(parsed) ? String(dateVal) : parsed.toISOString().slice(0,10);
+      ds = isNaN(parsed) ? String(dateVal) : toLocalISO(parsed);
     }
     out.push({
       date: ds,
@@ -440,7 +450,7 @@ function shiftAnchor(dir){
   if(state.period==='day') a.setDate(a.getDate()+dir);
   if(state.period==='week') a.setDate(a.getDate()+dir*7);
   if(state.period==='month') a.setMonth(a.getMonth()+dir);
-  state.anchor = a.toISOString().slice(0,10);
+  state.anchor = toLocalISO(a);
   render();
 }
 
