@@ -109,8 +109,17 @@
   .mt-metrics{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
   .mt-metrics div{font-family:'JetBrains Mono',monospace;font-size:13px;}
   .mt-metrics span{display:block;font-family:'Inter',sans-serif;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;}
-  .mt-rows{font-size:12px;color:var(--muted);}
-  .mt-rows div{display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid rgba(255,255,255,0.03);}
+  .modal-metric-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;}
+  .modal-metric-table th{text-align:right;color:var(--faint);font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);}
+  .modal-metric-table th:first-child{text-align:left;}
+  .modal-metric-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);}
+  .modal-metric-table td.tval{text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text);}
+  .modal-metric-table td.pctcell{color:var(--teal);}
+  .modal-metric-table tr.tl-row{cursor:pointer;background:rgba(255,255,255,0.03);font-weight:600;}
+  .modal-metric-table tr.tl-row:hover{background:rgba(255,255,255,0.06);}
+  .modal-metric-table tr.tl-row td:first-child{color:var(--text);}
+  .modal-metric-table tr.exec-row td.indent{padding-left:26px;color:var(--muted);font-weight:400;}
+  .modal-metric-table .caret{display:inline-block;width:12px;color:var(--faint);}
 
   .empty{padding:60px 20px;text-align:center;color:var(--muted);}
   .empty .display{font-size:20px;color:var(--text);margin-bottom:8px;}
@@ -614,6 +623,50 @@ function renderGaugeStrip(){
   });
 }
 
+function buildTeamTable(tk, teamRows){
+  const t = TEAMS[tk];
+  const isSales = tk === 'sales';
+  const metricKeys = isSales ? ['enquiry','testDrive','bookings','retail'] : t.metrics;
+  const headerCells = isSales
+    ? ['Enquiry','%','Test drive','%','Bookings','%','Retail']
+    : metricKeys.map(m=>t.metricLabels[m]);
+
+  const groups = {};
+  teamRows.forEach(r=>{
+    groups[r.tl] = groups[r.tl] || [];
+    groups[r.tl].push(r);
+  });
+
+  function pct(num, den){ return den>0 ? Math.round((num/den)*100)+'%' : '0%'; }
+
+  function rowCells(vals){
+    if(!isSales) return vals.map(v=>`<td class="tval">${v}</td>`).join('');
+    const [enq,td,bk,rt] = vals;
+    return `<td class="tval">${enq}</td><td class="tval pctcell">${pct(td,enq)}</td>`
+      + `<td class="tval">${td}</td><td class="tval pctcell">${pct(bk,td)}</td>`
+      + `<td class="tval">${bk}</td><td class="tval pctcell">${pct(rt,bk)}</td>`
+      + `<td class="tval">${rt}</td>`;
+  }
+
+  let rowsHtml = '';
+  let idx = 0;
+  Object.keys(groups).sort().forEach(tl=>{
+    const execs = groups[tl];
+    const sums = metricKeys.map(m => execs.reduce((s,r)=>s+(r[m]||0),0));
+    const tlId = tk+'_tl_'+(idx++);
+    rowsHtml += `<tr class="tl-row" data-tl="${tlId}"><td><span class="caret">&#9656;</span>${tl}</td>${rowCells(sums)}</tr>`;
+    execs.forEach(r=>{
+      const vals = metricKeys.map(m=>r[m]||0);
+      rowsHtml += `<tr class="exec-row" data-parent="${tlId}" style="display:none;"><td class="indent">${r.exec}</td>${rowCells(vals)}</tr>`;
+    });
+  });
+
+  return `<table class="modal-metric-table">
+    <thead><tr><th>Team leader</th>${headerCells.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>`;
+}
+
 function openDayModal(dateStr){
   const dayRows = filteredRows().filter(r=>r.date===dateStr);
   const dt = new Date(dateStr+'T00:00:00');
@@ -628,11 +681,23 @@ function openDayModal(dateStr){
     html += `<div class="modal-team">
       <div class="mt-head"><span class="dot" style="background:${t.color}"></span><b>${t.label}</b></div>
       <div class="mt-metrics">${t.metrics.map(m=>`<div>${totals[m]}<span>${t.metricLabels[m]}</span></div>`).join('')}</div>
-      <div class="mt-rows">${teamRows.map(r=>`<div><span>${r.exec} <span style="color:var(--faint)">(${r.tl})</span></span><span class="mono">${t.metrics.map(m=>r[m]).join(' / ')}</span></div>`).join('')}</div>
+      ${buildTeamTable(tk, teamRows)}
     </div>`;
   });
   document.getElementById('modalBody').innerHTML = html || '<div class="empty">No rows recorded for this date.</div>';
   document.getElementById('modalOverlay').classList.add('show');
+
+  document.querySelectorAll('#modalBody .tl-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const id = row.dataset.tl;
+      const expanded = row.classList.toggle('expanded');
+      document.querySelectorAll(`#modalBody .exec-row[data-parent="${id}"]`).forEach(er=>{
+        er.style.display = expanded ? 'table-row' : 'none';
+      });
+      const caret = row.querySelector('.caret');
+      if(caret) caret.innerHTML = expanded ? '&#9662;' : '&#9656;';
+    });
+  });
 }
 
 document.getElementById('modalClose').addEventListener('click', ()=> document.getElementById('modalOverlay').classList.remove('show'));
